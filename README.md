@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BF6 My Tracker
 
-## Getting Started
+Battlefield 6 (BF6) のプレイヤー戦績を追跡・表示するためのパーソナル・スタッツ・トラッカーです。
+Gamtools Network APIを使用して最新の戦績を取得し、過去の戦績との差分（成長）を視覚化します。
 
-First, run the development server:
+## 主な機能
+- **プレイヤーの基本戦績表示**: K/D比、KPM、DPM、勝率、スコア/分、ヘッドショット数、蘇生数、アシスト数などを表示。
+- **成長の可視化**: 過去のデータと比較し、上昇・下降のトレンドをアイコン（矢印）で分かりやすく表示。
+- **武器ランキング**: キル数が多い上位10件の武器を画像付きのテーブル形式で表示。命中率も確認可能。
+- **ダークモードUI**: 最新のモダンでプレミアムなダークテーマを採用したデザイン。
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 技術スタック
+- **フレームワーク**: Next.js 16 (App Router)
+- **スタイリング**: Vanilla CSS (CSS Modules)
+- **データベース ORM**: Prisma (v5)
+- **データベース**: Turso (libSQL) / ローカル開発時はSQLite (`dev.db`)
+- **デプロイ**: Vercel
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## ローカルでの動かし方
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. リポジトリをクローンまたはダウンロードし、依存関係をインストールします。
+   ```bash
+   npm install
+   ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+2. `.env` ファイルを作成し、環境変数を設定します。（`.env.example` を参考にしてください）
+   ```env
+   GAMETOOLS_PLAYER_NAME="your_player_name"
+   GAMETOOLS_PLATFORM="pc"
+   DATABASE_URL="file:./dev.db"
+   ```
+   ※クラウドのTursoデータベースを使用する場合は、`TURSO_DATABASE_URL` と `TURSO_AUTH_TOKEN` を追加で設定してください。
 
-## Learn More
+3. ローカルデータベースのセットアップ（マイグレーション）を行います。
+   ```bash
+   npx prisma db push
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+4. 開発サーバーを起動します。
+   ```bash
+   npm run dev
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+5. ブラウザで [http://localhost:3000](http://localhost:3000) にアクセスします。
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## デプロイ方法 (Vercel + Turso)
+本アプリケーションは Vercel へのデプロイに最適化されています。
+1. **Turso** でデータベースを作成し、URLとAuth Tokenを取得します。
+2. リポジトリを GitHub にプッシュします。
+3. **Vercel** でリポジトリをインポートし、以下の環境変数を設定してデプロイします。
+   - `GAMETOOLS_PLAYER_NAME`
+   - `GAMETOOLS_PLATFORM`
+   - `TURSO_DATABASE_URL`
+   - `TURSO_AUTH_TOKEN`
+4. デプロイ完了後、`setup.sql` または Prisma CLI を使ってTursoデータベースにテーブルを作成してください。
