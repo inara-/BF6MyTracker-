@@ -1,0 +1,53 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  id        String   @id @default(cuid())
+  trnId     String   @unique
+  stats     PlayerStats[]
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+model PlayerStats {
+  id        String   @id @default(cuid())
+  playerId  String
+  player    Player   @relation(fields: [playerId], references: [id])
+  
+  // Overall Stats
+  kills     Int      @default(0)
+  deaths    Int      @default(0)
+  kdRatio   Float    @default(0.0)
+  headshots Int      @default(0)
+  winPct      Float    @default(0.0)
+  scorePerMin Float  @default(0.0)
+  kpm         Float?   @default(0.0)
+  dpm         Float?   @default(0.0)
+  revives     Int?     @default(0)
+  assists     Int?     @default(0)
+  
+  // Weapon Stats - relation to track individual weapons
+  weaponStats WeaponStats[]
+
+  createdAt DateTime @default(now()) // To track daily changes
+}
+
+model WeaponStats {
+  id           String   @id @default(cuid())
+  statsId      String
+  stats        PlayerStats @relation(fields: [statsId], references: [id])
+  
+  name         String
+  kills        Int
+  accuracy     Float
+  rank         Int?     // Current rank within player's weapons
+  
+  createdAt    DateTime @default(now())
+}
