@@ -48,37 +48,64 @@ export async function fetchAndCompareStats(): Promise<StatsComparison> {
     player = await prisma.player.create({ data: { trnId: playerId } });
   }
 
-  // 3. Get the most recent previous stats
-  const previousRecord = await prisma.playerStats.findFirst({
+  // 3. Find the most recent record to check if stats have changed
+  const mostRecentRecord = await prisma.playerStats.findFirst({
     where: { playerId: player.id },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  // 4. Save new stats to DB ONLY IF they have changed (e.g. kills or deaths are different)
+  // or if there is no previous record
+  if (!mostRecentRecord || mostRecentRecord.kills !== latestStats.kills || mostRecentRecord.deaths !== latestStats.deaths) {
+    await prisma.playerStats.create({
+      data: {
+        playerId: player.id,
+        kills: latestStats.kills,
+        deaths: latestStats.deaths,
+        kdRatio: latestStats.kdRatio,
+        headshots: latestStats.headshots,
+        winPct: latestStats.winPct,
+        scorePerMin: latestStats.scorePerMin,
+        kpm: latestStats.kpm,
+        dpm: latestStats.dpm,
+        revives: latestStats.revives,
+        assists: latestStats.assists,
+        weaponStats: {
+          create: latestStats.weapons.map(w => ({
+            name: w.name,
+            kills: w.kills,
+            accuracy: w.accuracy,
+            rank: w.rank
+          }))
+        }
+      }
+    });
+  }
+
+  // 5. Get the baseline record for calculating the 24-hour difference
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  
+  // Find the most recent record that is OLDER than 24 hours
+  let baselineRecord = await prisma.playerStats.findFirst({
+    where: {
+      playerId: player.id,
+      createdAt: { lt: twentyFourHoursAgo }
+    },
     orderBy: { createdAt: 'desc' },
     include: { weaponStats: true }
   });
 
-  // 4. Save new stats to DB
-  const newRecord = await prisma.playerStats.create({
-    data: {
-      playerId: player.id,
-      kills: latestStats.kills,
-      deaths: latestStats.deaths,
-      kdRatio: latestStats.kdRatio,
-      headshots: latestStats.headshots,
-      winPct: latestStats.winPct,
-      scorePerMin: latestStats.scorePerMin,
-      kpm: latestStats.kpm,
-      dpm: latestStats.dpm,
-      revives: latestStats.revives,
-      assists: latestStats.assists,
-      weaponStats: {
-        create: latestStats.weapons.map(w => ({
-          name: w.name,
-          kills: w.kills,
-          accuracy: w.accuracy,
-          rank: w.rank
-        }))
-      }
-    }
-  });
+  // If no record is older than 24 hours (e.g. started tracking today),
+  // use the absolute oldest record available (the very first tracking point)
+  if (!baselineRecord) {
+    baselineRecord = await prisma.playerStats.findFirst({
+      where: { playerId: player.id },
+      orderBy: { createdAt: 'asc' },
+      include: { weaponStats: true }
+    });
+  }
+
+  const previousRecord = baselineRecord;
 
   // 5. Calculate Changes
   const changes: StatsComparison["changes"] = {
