@@ -17,7 +17,7 @@ export default async function Home() {
         
         <div className={styles.heroStats}>
           <div className={`glass-panel ${styles.heroStatCard}`}>
-            <div className={styles.statLabel}>Daily Kills</div>
+            <div className={styles.statLabel}>Total Kills</div>
             <div className={styles.statValue}>{current.kills}</div>
             <TrendIndicator value={changes.killsChange || 0} />
           </div>
