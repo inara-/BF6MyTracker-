@@ -33,6 +33,7 @@ export interface StatsComparison {
     revivesChange?: number;
     assistsChange?: number;
     weaponRankChanges: Record<string, number>;
+    weaponKillChanges: Record<string, number>;
   };
 }
 
@@ -109,7 +110,8 @@ export async function fetchAndCompareStats(): Promise<StatsComparison> {
 
   // 5. Calculate Changes
   const changes: StatsComparison["changes"] = {
-    weaponRankChanges: {}
+    weaponRankChanges: {},
+    weaponKillChanges: {}
   };
 
   if (previousRecord) {
@@ -123,15 +125,23 @@ export async function fetchAndCompareStats(): Promise<StatsComparison> {
     changes.revivesChange = latestStats.revives - (previousRecord.revives || 0);
     changes.assistsChange = latestStats.assists - (previousRecord.assists || 0);
 
-    // Calculate weapon rank changes
+    // Calculate weapon rank and kill changes
     latestStats.weapons.forEach(currWeapon => {
       const prevWeapon = previousRecord.weaponStats.find(w => w.name === currWeapon.name);
+      
+      // Rank change
       if (currWeapon.rank && prevWeapon?.rank) {
         // High rank number means lower position (rank 1 is best).
-        // If previous rank was 3, and current is 2, change is +1 (improved)
         changes.weaponRankChanges[currWeapon.name] = prevWeapon.rank - currWeapon.rank;
       } else {
-         changes.weaponRankChanges[currWeapon.name] = 0; // New or unranked previously
+         changes.weaponRankChanges[currWeapon.name] = 0;
+      }
+
+      // Kill change
+      if (prevWeapon) {
+        changes.weaponKillChanges[currWeapon.name] = currWeapon.kills - prevWeapon.kills;
+      } else {
+        changes.weaponKillChanges[currWeapon.name] = 0;
       }
     });
 
@@ -156,6 +166,7 @@ export async function fetchAndCompareStats(): Promise<StatsComparison> {
     // If no previous record, default changes to 0
     latestStats.weapons.forEach(w => {
       changes.weaponRankChanges[w.name] = 0;
+      changes.weaponKillChanges[w.name] = 0;
     });
 
     return {

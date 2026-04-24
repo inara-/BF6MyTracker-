@@ -86,12 +86,14 @@ export default async function Home() {
               <th>Rank</th>
               <th>Weapon</th>
               <th>Kills</th>
+              <th>Change</th>
               <th>Accuracy</th>
             </tr>
           </thead>
           <tbody>
             {current.weapons.map((weapon) => {
               const rankChange = changes.weaponRankChanges[weapon.name] || 0;
+              const killChange = changes.weaponKillChanges[weapon.name] || 0;
               return (
                 <tr key={weapon.name}>
                   <td>
@@ -113,6 +115,9 @@ export default async function Home() {
                     </div>
                   </td>
                   <td className={styles.tableValue}>{weapon.kills}</td>
+                  <td>
+                    <TrendIndicator value={killChange} />
+                  </td>
                   <td className={styles.tableValue}>{weapon.accuracy}%</td>
                 </tr>
               );
