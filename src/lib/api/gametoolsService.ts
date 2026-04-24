@@ -63,7 +63,7 @@ export class GametoolsService {
         assists: data.killAssists || 0,
         weapons: (data.weapons || [])
           .sort((a: any, b: any) => (b.kills || 0) - (a.kills || 0))
-          .slice(0, 10)
+          .slice(0, 30)
           .map((w: any, index: number) => ({
             name: w.weaponName || "Unknown",
             kills: w.kills || 0,
