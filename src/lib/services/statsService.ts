@@ -49,39 +49,61 @@ export async function fetchAndCompareStats(): Promise<StatsComparison> {
     player = await prisma.player.create({ data: { trnId: playerId } });
   }
 
-  // 3. Find the most recent record to check if stats have changed
+  // 3. Find the most recent record
   const mostRecentRecord = await prisma.playerStats.findFirst({
     where: { playerId: player.id },
-    orderBy: { createdAt: 'desc' }
+    orderBy: { createdAt: 'desc' },
+    include: { weaponStats: true }
   });
 
-  // 4. Save new stats to DB ONLY IF they have changed (e.g. kills or deaths are different)
-  // or if there is no previous record
-  if (!mostRecentRecord || mostRecentRecord.kills !== latestStats.kills || mostRecentRecord.deaths !== latestStats.deaths) {
-    await prisma.playerStats.create({
-      data: {
-        playerId: player.id,
-        kills: latestStats.kills,
-        deaths: latestStats.deaths,
-        kdRatio: latestStats.kdRatio,
-        headshots: latestStats.headshots,
-        winPct: latestStats.winPct,
-        scorePerMin: latestStats.scorePerMin,
-        kpm: latestStats.kpm,
-        dpm: latestStats.dpm,
-        revives: latestStats.revives,
-        assists: latestStats.assists,
-        weaponStats: {
-          create: latestStats.weapons.map(w => ({
-            name: w.name,
-            kills: w.kills,
-            accuracy: w.accuracy,
-            rank: w.rank
-          }))
+  // 4. Save new stats to DB ONLY IF they have changed AND we have real data
+  if (latestStats) {
+    if (!mostRecentRecord || mostRecentRecord.kills !== latestStats.kills || mostRecentRecord.deaths !== latestStats.deaths) {
+      await prisma.playerStats.create({
+        data: {
+          playerId: player.id,
+          kills: latestStats.kills,
+          deaths: latestStats.deaths,
+          kdRatio: latestStats.kdRatio,
+          headshots: latestStats.headshots,
+          winPct: latestStats.winPct,
+          scorePerMin: latestStats.scorePerMin,
+          kpm: latestStats.kpm,
+          dpm: latestStats.dpm,
+          revives: latestStats.revives,
+          assists: latestStats.assists,
+          weaponStats: {
+            create: latestStats.weapons.map(w => ({
+              name: w.name,
+              kills: w.kills,
+              accuracy: w.accuracy,
+              rank: w.rank
+            }))
+          }
         }
-      }
-    });
+      });
+    }
   }
+
+  // Use the real stats if we got them, otherwise fallback to the most recent record in DB
+  const displayStats = latestStats || (mostRecentRecord ? {
+    kills: mostRecentRecord.kills,
+    deaths: mostRecentRecord.deaths,
+    kdRatio: mostRecentRecord.kdRatio,
+    headshots: mostRecentRecord.headshots,
+    winPct: mostRecentRecord.winPct,
+    scorePerMin: mostRecentRecord.scorePerMin,
+    kpm: mostRecentRecord.kpm || 0,
+    dpm: mostRecentRecord.dpm || 0,
+    revives: mostRecentRecord.revives || 0,
+    assists: mostRecentRecord.assists || 0,
+    weapons: mostRecentRecord.weaponStats.map(w => ({
+      name: w.name,
+      kills: w.kills,
+      accuracy: w.accuracy,
+      rank: w.rank || 0
+    }))
+  } : gametoolsService.generateMockStats()); // Absolute fallback to mock if DB is empty too
 
   // 5. Get the baseline record for calculating the 24-hour difference
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -108,30 +130,29 @@ export async function fetchAndCompareStats(): Promise<StatsComparison> {
 
   const previousRecord = baselineRecord;
 
-  // 5. Calculate Changes
+  // 6. Calculate Changes
   const changes: StatsComparison["changes"] = {
     weaponRankChanges: {},
     weaponKillChanges: {}
   };
 
   if (previousRecord) {
-    changes.kdRatioChange = Number((latestStats.kdRatio - previousRecord.kdRatio).toFixed(3));
-    changes.killsChange = latestStats.kills - previousRecord.kills;
-    changes.headshotsChange = latestStats.headshots - previousRecord.headshots;
-    changes.winPctChange = Number((latestStats.winPct - previousRecord.winPct).toFixed(1));
-    changes.spmChange = Number((latestStats.scorePerMin - previousRecord.scorePerMin).toFixed(2));
-    changes.kpmChange = Number((latestStats.kpm - (previousRecord.kpm || 0)).toFixed(2));
-    changes.dpmChange = Number((latestStats.dpm - (previousRecord.dpm || 0)).toFixed(1));
-    changes.revivesChange = latestStats.revives - (previousRecord.revives || 0);
-    changes.assistsChange = latestStats.assists - (previousRecord.assists || 0);
+    changes.kdRatioChange = Number((displayStats.kdRatio - previousRecord.kdRatio).toFixed(3));
+    changes.killsChange = displayStats.kills - previousRecord.kills;
+    changes.headshotsChange = displayStats.headshots - previousRecord.headshots;
+    changes.winPctChange = Number((displayStats.winPct - previousRecord.winPct).toFixed(1));
+    changes.spmChange = Number((displayStats.scorePerMin - previousRecord.scorePerMin).toFixed(2));
+    changes.kpmChange = Number((displayStats.kpm - (previousRecord.kpm || 0)).toFixed(2));
+    changes.dpmChange = Number((displayStats.dpm - (previousRecord.dpm || 0)).toFixed(1));
+    changes.revivesChange = displayStats.revives - (previousRecord.revives || 0);
+    changes.assistsChange = displayStats.assists - (previousRecord.assists || 0);
 
     // Calculate weapon rank and kill changes
-    latestStats.weapons.forEach(currWeapon => {
+    displayStats.weapons.forEach(currWeapon => {
       const prevWeapon = previousRecord.weaponStats.find(w => w.name === currWeapon.name);
       
       // Rank change
       if (currWeapon.rank && prevWeapon?.rank) {
-        // High rank number means lower position (rank 1 is best).
         changes.weaponRankChanges[currWeapon.name] = prevWeapon.rank - currWeapon.rank;
       } else {
          changes.weaponRankChanges[currWeapon.name] = 0;
@@ -146,7 +167,7 @@ export async function fetchAndCompareStats(): Promise<StatsComparison> {
     });
 
     return {
-      current: latestStats,
+      current: displayStats,
       previous: {
         kills: previousRecord.kills,
         deaths: previousRecord.deaths,
@@ -164,13 +185,13 @@ export async function fetchAndCompareStats(): Promise<StatsComparison> {
     };
   } else {
     // If no previous record, default changes to 0
-    latestStats.weapons.forEach(w => {
+    displayStats.weapons.forEach(w => {
       changes.weaponRankChanges[w.name] = 0;
       changes.weaponKillChanges[w.name] = 0;
     });
 
     return {
-       current: latestStats,
+       current: displayStats,
        previous: null,
        changes
     };

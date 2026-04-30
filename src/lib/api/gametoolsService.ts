@@ -31,14 +31,18 @@ export class GametoolsService {
     this.platform = process.env.GAMETOOLS_PLATFORM || "pc";
   }
 
-  async getPlayerStats(): Promise<PlayerStatsData> {
+  async getPlayerStats(): Promise<PlayerStatsData | null> {
     try {
-      // url: https://api.gametools.network/bf6/stats/?name=Nonna123&platform=pc&format_values=false
-      // format_values=false returns accuracy etc as floats instead of string percentages
-      const url = `https://api.gametools.network/bf6/stats/?name=${encodeURIComponent(this.playerName)}&platform=${encodeURIComponent(this.platform)}&format_values=false`;
+      // Map 'pc' to 'ea' for Battlefield 6 / 2042 API on GameTools
+      let apiPlatform = this.platform;
+      if (apiPlatform.toLowerCase() === 'pc') {
+        apiPlatform = 'ea';
+      }
+
+      const url = `https://api.gametools.network/bf6/stats/?name=${encodeURIComponent(this.playerName)}&platform=${encodeURIComponent(apiPlatform)}&format_values=false`;
+      console.log(`Fetching stats from: ${url}`);
       
       const response = await fetch(url, {
-        // disable Next.js cache so we get fresh data
         cache: 'no-store'
       });
 
@@ -48,15 +52,19 @@ export class GametoolsService {
 
       const data = await response.json();
       
+      if (!data || data.hasResults === false) {
+        console.warn(`No results found for player ${this.playerName} on ${apiPlatform}`);
+        return null;
+      }
+
       // Parse GameTools response structure
-      // Note: If BF6 isn't fully returning data yet, this structure is based on BF2042 API response mapping
       return {
         kills: data.kills || 0,
         deaths: data.deaths || 0,
         kdRatio: data.killDeath || 0,
-        headshots: data.headShots || 0, // In gametools bf2042 API, it's often headShots (amount) or headshots (percentage)
+        headshots: data.headShots || 0,
         winPct: data.winPercent ? parseFloat(data.winPercent) : 0, 
-        scorePerMin: data.scorePerMinute || data.killsPerMinute * 100 || 0, // approximation if spm is missing
+        scorePerMin: data.scorePerMinute || (data.killsPerMinute ? data.killsPerMinute * 100 : 0),
         kpm: data.killsPerMinute || 0,
         dpm: data.damagePerMinute || 0,
         revives: data.revives || 0,
@@ -74,13 +82,14 @@ export class GametoolsService {
       };
 
     } catch (error) {
-      console.error("Failed to fetch from GameTools API. Player might not exist yet or BF6 API is empty.", error);
-      console.log("Falling back to mock data so the app continues to run for demonstration.");
-      return this.generateMockStats();
+      console.error("Failed to fetch from GameTools API:", error);
+      // Return null instead of mock data to avoid DB contamination
+      return null;
     }
   }
 
-  private generateMockStats(): PlayerStatsData {
+  // Keep for UI testing but don't use as default fallback
+  public generateMockStats(): PlayerStatsData {
     const fluctuation = (Math.random() * 0.1) - 0.05;
     
     return {
